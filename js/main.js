@@ -12,16 +12,11 @@ var createDefaultEngine = function () {
 };
 
 var createScene = function () {
-  engine.enableOfflineSupport = true;
+  engine.enableOfflineSupport = false;
   scene = new BABYLON.Scene(engine);
+
   const camera = createCamera();
   createLight();
-
-  createGUIElements();
-  createSkybox();
-  createGround();
-
-  importBabylonMesh("Skull/skull.babylon", 0, 3, 2, 0.02);
 
   // Keyboard events
   var inputMap = {};
@@ -43,7 +38,7 @@ var createScene = function () {
     )
   );
 
-  const player = new Player(scene, camera, inputMap);
+  createProject(scene, camera, inputMap);
 
   return scene;
 };
@@ -68,23 +63,21 @@ function createLight() {
   );
 }
 
-function createSkybox() {
-  var skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 1000.0 }, scene);
-  var skyboxMaterial = new BABYLON.StandardMaterial("skyBox", scene);
-  skyboxMaterial.backFaceCulling = false;
-  skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture(
-    "textures/skybox4",
-    scene
-  );
-  skyboxMaterial.reflectionTexture.coordinatesMode =
-    BABYLON.Texture.SKYBOX_MODE;
-  skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
-  skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
-  skybox.material = skyboxMaterial;
+function createProject(scene, camera, inputMap) {
+  scene.collisionEnabled = true;
+  scene.gravity = new BABYLON.Vector3(0, -0.9, 0);
+
+  const player = new Player(scene, camera, inputMap);
+
+  createGUIElements();
+  createSkybox();
+  createGround();
+  createAreaLimit();
+
+  importBabylonMesh("Skull/skull.babylon", 0, 3, 2, 0.01);
 }
 
 function createGUIElements() {
-  // GUI
   var advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI(
     "UI"
   );
@@ -115,6 +108,25 @@ function createGUIElements() {
   advancedTexture.addControl(namesPanel);
 }
 
+function createSkybox() {
+  var skybox = BABYLON.MeshBuilder.CreateSphere(
+    "skyBox",
+    { diameter: 200, sideOrientation: 1 },
+    scene
+  );
+  var skyboxMaterial = new BABYLON.StandardMaterial("skyBox", scene);
+  skyboxMaterial.backFaceCulling = false;
+  skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture(
+    "textures/skybox4",
+    scene
+  );
+  skyboxMaterial.reflectionTexture.coordinatesMode =
+    BABYLON.Texture.SKYBOX_MODE;
+  skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+  skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+  skybox.material = skyboxMaterial;
+}
+
 function createGround() {
   const groundMaterial = new BABYLON.StandardMaterial("groundMaterial");
   groundMaterial.diffuseTexture = new BABYLON.Texture("textures/snow.jfif");
@@ -122,11 +134,28 @@ function createGround() {
   const largeGround = BABYLON.MeshBuilder.CreateGroundFromHeightMap(
     "largeGround",
     "heightmaps/01.png",
-    { width: 200, height: 200, subdivisions: 30, minHeight: 0, maxHeight: 5 }
+    {
+      width: 200,
+      height: 200,
+      subdivisions: 30,
+      minHeight: 0,
+      maxHeight: 12,
+      sideOrientation: 0,
+    }
   );
   groundMaterial.diffuseTexture.uScale = 30;
   groundMaterial.diffuseTexture.vScale = 30;
   largeGround.material = groundMaterial;
+}
+
+function createAreaLimit() {
+  var skybox = BABYLON.MeshBuilder.CreateSphere(
+    "skyBox",
+    { diameter: 135, sideOrientation: 1 },
+    scene
+  );
+  skybox.visibility = 0;
+  skybox.checkCollisions = true;
 }
 
 function importBabylonMesh(filenameDotFormat, posX, posY, posZ, scale) {
@@ -136,7 +165,7 @@ function importBabylonMesh(filenameDotFormat, posX, posY, posZ, scale) {
     filenameDotFormat,
     scene
   ).then((result) => {
-    let mesh = result.meshes[0];
+    mesh = result.meshes[0];
     mesh.position.x = posX;
     mesh.position.y = posY;
     mesh.position.z = posZ;
@@ -178,7 +207,6 @@ window.addEventListener("resize", function () {
 
 class Player {
   constructor(scene, camera, inputMap) {
-    // Load hero character
     BABYLON.SceneLoader.ImportMesh(
       "",
       "https://assets.babylonjs.com/meshes/",
@@ -187,14 +215,11 @@ class Player {
       function (newMeshes, particleSystems, skeletons, animationGroups) {
         var hero = newMeshes[0];
 
-        //Scale the model down
         hero.scaling.scaleInPlace(0.1);
 
-        //Lock camera on the character
         camera.target = hero;
 
-        //Hero character variables
-        var heroSpeed = 0.045;
+        var heroSpeed = 0.06;
         var heroSpeedBackwards = 0.01;
         var heroRotationSpeed = 0.1;
 
@@ -205,10 +230,9 @@ class Player {
         const idleAnim = scene.getAnimationGroupByName("Idle");
         const sambaAnim = scene.getAnimationGroupByName("Samba");
 
-        //Rendering loop (executed for everyframe)
         scene.onBeforeRenderObservable.add(() => {
           var keydown = false;
-          //Manage the movements of the character (e.g. position, direction)
+
           if (inputMap["w"]) {
             hero.moveWithCollisions(hero.forward.scaleInPlace(heroSpeed));
             keydown = true;
@@ -230,25 +254,23 @@ class Player {
           if (inputMap["b"]) {
             keydown = true;
           }
-          if (inputMap["1"]) {
-            heroSpeed = 0.045;
+          if (inputMap["+"]) {
+            heroSpeed = 0.08;
             keydown = true;
           }
           if (inputMap["2"]) {
-            heroSpeed = 0.065;
+            heroSpeed = 0.1;
             keydown = true;
           }
           if (inputMap["3"]) {
-            heroSpeed = 0.085;
+            heroSpeed = 0.12;
             keydown = true;
           }
 
-          //Manage animations to be played
           if (keydown) {
             if (!animating) {
               animating = true;
               if (inputMap["s"]) {
-                //Walk backwards
                 walkBackAnim.start(
                   true,
                   1.0,
@@ -257,24 +279,19 @@ class Player {
                   false
                 );
               } else if (inputMap["b"]) {
-                //Samba!
                 sambaAnim.start(true, 1.0, sambaAnim.from, sambaAnim.to, false);
               } else {
-                //Walk
                 walkAnim.start(true, 1.0, walkAnim.from, walkAnim.to, false);
               }
             }
           } else {
             if (animating) {
-              //Default animation is idle when no key is down
               idleAnim.start(true, 1.0, idleAnim.from, idleAnim.to, false);
 
-              //Stop all animations besides Idle Anim when no key is down
               sambaAnim.stop();
               walkAnim.stop();
               walkBackAnim.stop();
 
-              //Ensure animation are played only once per rendering loop
               animating = false;
             }
           }
