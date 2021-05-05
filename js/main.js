@@ -11,39 +11,23 @@ var createDefaultEngine = function () {
   });
 };
 
+const meshesArray = [
+  { fileName: "aerobatic_plane.glb", scale: 30, posY: 5 },
+  { fileName: "Georgia-Tech-Dragon/dragon.babylon", scale: 50, posY: 0 },
+  { fileName: "Skull/skull.babylon", scale: 0.015, posY: 0.45 },
+  { fileName: "toast_acrobatics.glb", scale: 5, posY: 0 },
+  { fileName: "shark.glb", scale: 1, posY: -2.5 },
+  { fileName: "haunted_house.glb", scale: 60, posY: 0 },
+  { fileName: "seagulf.glb", scale: 0.006, posY: 3.15 },
+];
+
+var barrels = new Map();
+var barrelsPoints = new Map();
+
 var createScene = function () {
   engine.enableOfflineSupport = false;
   scene = new BABYLON.Scene(engine);
 
-  const camera = createCamera();
-  createLight();
-
-  // Keyboard events
-  var inputMap = {};
-  scene.actionManager = new BABYLON.ActionManager(scene);
-  scene.actionManager.registerAction(
-    new BABYLON.ExecuteCodeAction(
-      BABYLON.ActionManager.OnKeyDownTrigger,
-      function (evt) {
-        inputMap[evt.sourceEvent.key] = evt.sourceEvent.type == "keydown";
-      }
-    )
-  );
-  scene.actionManager.registerAction(
-    new BABYLON.ExecuteCodeAction(
-      BABYLON.ActionManager.OnKeyUpTrigger,
-      function (evt) {
-        inputMap[evt.sourceEvent.key] = evt.sourceEvent.type == "keydown";
-      }
-    )
-  );
-
-  createProject(scene, camera, inputMap);
-
-  return scene;
-};
-
-function createCamera() {
   const camera = new BABYLON.ArcRotateCamera(
     "camera",
     -Math.PI / 2,
@@ -53,28 +37,58 @@ function createCamera() {
   );
   camera.attachControl(canvas, true);
 
-  return camera;
-}
-
-function createLight() {
   const light = new BABYLON.HemisphericLight(
     "light",
     new BABYLON.Vector3(1, 1, 0)
   );
-}
 
-function createProject(scene, camera, inputMap) {
+  createProject(scene, camera);
+
+  return scene;
+};
+
+function createProject(scene, camera) {
   scene.collisionEnabled = true;
   scene.gravity = new BABYLON.Vector3(0, -0.9, 0);
+  //scene.debugLayer.show();
 
-  const player = new Player(scene, camera, inputMap);
+  const player = new Player(scene, camera, actionManager());
 
   createGUIElements();
+
   createSkybox();
   createGround();
   createAreaLimit();
 
-  importBabylonMesh("Skull/skull.babylon", 0, 3, 2, 0.01);
+  importElements("mesh");
+  importElements("barrel");
+
+  triggerExplosion();
+}
+
+function actionManager() {
+  var inputMap = {};
+
+  scene.actionManager = new BABYLON.ActionManager(scene);
+  scene.actionManager.registerAction(
+    new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnKeyDownTrigger,
+      function (evt) {
+        inputMap[evt.sourceEvent.key] = evt.sourceEvent.type == "keydown";
+      }
+    )
+  );
+
+  scene.actionManager.registerAction(
+    new BABYLON.ExecuteCodeAction(
+      BABYLON.ActionManager.OnKeyUpTrigger,
+      function (evt) {
+        inputMap[evt.sourceEvent.key] = evt.sourceEvent.type == "keydown";
+      }
+    )
+  );
+
+  return inputMap;
 }
 
 function createGUIElements() {
@@ -143,8 +157,8 @@ function createGround() {
       sideOrientation: 0,
     }
   );
-  groundMaterial.diffuseTexture.uScale = 30;
-  groundMaterial.diffuseTexture.vScale = 30;
+  groundMaterial.diffuseTexture.uScale = 10;
+  groundMaterial.diffuseTexture.vScale = 10;
   largeGround.material = groundMaterial;
 }
 
@@ -158,18 +172,47 @@ function createAreaLimit() {
   skybox.checkCollisions = true;
 }
 
-function importBabylonMesh(filenameDotFormat, posX, posY, posZ, scale) {
+function importBabylonMesh(mesh, posX, posZ) {
   BABYLON.SceneLoader.ImportMeshAsync(
     "",
     "https://models.babylonjs.com/",
-    filenameDotFormat,
+    mesh.fileName,
     scene
   ).then((result) => {
-    mesh = result.meshes[0];
-    mesh.position.x = posX;
-    mesh.position.y = posY;
-    mesh.position.z = posZ;
-    mesh.scaling.scaleInPlace(scale);
+    const importedMesh = result.meshes[0];
+    importedMesh.position.x = posX;
+    importedMesh.position.y = mesh.posY;
+    importedMesh.position.z = posZ;
+    importedMesh.scaling.scaleInPlace(mesh.scale);
+  });
+}
+
+function importElements(element) {
+  var angle = 0;
+  var quantity = element == "mesh" ? 7 : 14;
+  var incAngle = Math.PI / (quantity / 2);
+  var radius = element == "mesh" ? 60 : 40;
+
+  for (var i = 0; i < quantity; i++) {
+    var x = Math.cos(angle) * radius;
+    var z = Math.sin(angle) * radius;
+    angle = angle + incAngle;
+
+    if (element == "mesh") importBabylonMesh(meshesArray[i], x, z);
+    else {
+      var barrel = new ExplodingBarrel("barrel" + i, x, z);
+      barrels.set("barrel" + i, barrel);
+
+      var point = [{ x: x, z: z }];
+      barrelsPoints.set("barrel" + i, point);
+      //console.log(barrelsPoints.get("barrel" + i));
+    }
+  }
+}
+
+function triggerExplosion() {
+  scene.meshes.forEach((mesh) => {
+    console.log(mesh);
   });
 }
 
@@ -214,6 +257,8 @@ class Player {
       scene,
       function (newMeshes, particleSystems, skeletons, animationGroups) {
         var hero = newMeshes[0];
+
+        hero.name = "hero";
 
         hero.scaling.scaleInPlace(0.1);
 
@@ -296,18 +341,31 @@ class Player {
             }
           }
         });
+
+        scene.addMesh(hero);
+
+        //console.log(scene.getMeshByName("hero"));
       }
     );
   }
 }
 
 class ExplodingBarrel {
-  constructor() {
-    BABYLON.SceneLoader.ImportMesh(
+  constructor(barrelName, posX, posZ) {
+    BABYLON.SceneLoader.ImportMeshAsync(
       "",
       "https://models.babylonjs.com/",
       "ExplodingBarrel.glb",
       scene
-    );
+    ).then((result) => {
+      const mesh = result.meshes[0];
+
+      mesh.scaling.scaleInPlace(0.025);
+
+      mesh.name = barrelName;
+
+      mesh.position.x = posX;
+      mesh.position.z = posZ;
+    });
   }
 }
