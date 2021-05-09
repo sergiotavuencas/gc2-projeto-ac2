@@ -11,6 +11,10 @@ var createDefaultEngine = function () {
   });
 };
 
+var areas = new Map();
+var sound;
+var intersected = false;
+var gameWon = false;
 const meshesArray = [
   { fileName: "aerobatic_plane.glb", scale: 30, posY: 5 },
   { fileName: "Georgia-Tech-Dragon/dragon.babylon", scale: 50, posY: 0 },
@@ -19,10 +23,8 @@ const meshesArray = [
   { fileName: "shark.glb", scale: 1, posY: -2.5 },
   { fileName: "haunted_house.glb", scale: 60, posY: 0 },
   { fileName: "seagulf.glb", scale: 0.006, posY: 3.15 },
+  { fileName: "ExplodingBarrel.glb", scale: 0.025, posY: 0 },
 ];
-
-var barrels = new Map();
-var barrelsPoints = new Map();
 
 var createScene = function () {
   engine.enableOfflineSupport = false;
@@ -49,21 +51,32 @@ var createScene = function () {
 
 function createProject(scene, camera) {
   scene.collisionEnabled = true;
-  scene.gravity = new BABYLON.Vector3(0, -0.9, 0);
   //scene.debugLayer.show();
+
+  var advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI(
+    "UI"
+  );
+
+  informationsPanel(advancedTexture);
+  //restartButton(advancedTexture);
+
+  //createSkybox();
+  //createGround();
+  createAreaLimit();
 
   const player = new Player(scene, camera, actionManager());
 
-  createGUIElements();
-
-  createSkybox();
-  createGround();
-  createAreaLimit();
-
-  importElements("mesh");
+  //importElements("mesh");
   importElements("barrel");
 
-  triggerExplosion();
+  sound = new BABYLON.Sound("sound", "./sounds/explosion.wav", scene, null, {
+    loop: false,
+    autoplay: false,
+  });
+
+  setTimeout(function () {
+    gameWon = true;
+  }, 10000);
 }
 
 function actionManager() {
@@ -91,35 +104,52 @@ function actionManager() {
   return inputMap;
 }
 
-function createGUIElements() {
-  var advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI(
-    "UI"
-  );
+function informationsPanel(userInterface) {
+  var informationsPanel = new BABYLON.GUI.Rectangle();
+  informationsPanel.width = 0.245;
+  informationsPanel.height = "225px";
+  informationsPanel.cornerRadius = 5;
+  informationsPanel.thickness = 4;
+  informationsPanel.background = "black";
 
-  var namesPanel = new BABYLON.GUI.Rectangle();
-  namesPanel.width = 0.245;
-  namesPanel.height = "225px";
-  namesPanel.cornerRadius = 5;
-  namesPanel.thickness = 4;
-  namesPanel.background = "black";
-
-  namesPanel.horizontalAlignment =
+  informationsPanel.horizontalAlignment =
     BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
-  namesPanel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+  informationsPanel.verticalAlignment =
+    BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
 
-  namesPanel.alpha = 0.7;
+  informationsPanel.alpha = 0.7;
 
-  var names = new BABYLON.GUI.TextBlock();
-  names.text =
+  var informations = new BABYLON.GUI.TextBlock();
+  informations.text =
     "Projeto AC2 - Computação Gráfica II" +
     "\n\nSérgio Vicente T. - 183263" +
     "\n\nControles:" +
     "\n\nW e S para andar\nA e D para direcionar\nB para dançar" +
     "\n1, 2 ou 3 para mudar a velocidade";
-  names.color = "white";
-  namesPanel.addControl(names);
+  informations.color = "white";
+  informationsPanel.addControl(informations);
+  userInterface.addControl(informationsPanel);
+}
 
-  advancedTexture.addControl(namesPanel);
+function restartButton(userInterface) {
+  var btnRestart = BABYLON.GUI.Button.CreateSimpleButton(
+    "btnRestart",
+    "RESTART"
+  );
+  btnRestart.width = 0.1;
+  btnRestart.height = "40px";
+  btnRestart.color = "white";
+  btnRestart.background = "black";
+  btnRestart.horizontalAlignment =
+    BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+  btnRestart.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
+  userInterface.addControl(btnRestart);
+
+  btnRestart.onPointerClickObservable.add(function () {
+    location.reload();
+  });
+
+  gameWon = false;
 }
 
 function createSkybox() {
@@ -163,16 +193,16 @@ function createGround() {
 }
 
 function createAreaLimit() {
-  var skybox = BABYLON.MeshBuilder.CreateSphere(
-    "skyBox",
-    { diameter: 135, sideOrientation: 1 },
-    scene
-  );
-  skybox.visibility = 0;
-  skybox.checkCollisions = true;
+  const cylinder = BABYLON.MeshBuilder.CreateCylinder("areaLimit", {
+    height: 5,
+    diameter: 140,
+    sideOrientation: 1,
+  });
+  cylinder.visibility = 0;
+  cylinder.checkCollisions = true;
 }
 
-function importBabylonMesh(mesh, posX, posZ) {
+function importBabylonMesh(mesh, meshName, posX, posZ) {
   BABYLON.SceneLoader.ImportMeshAsync(
     "",
     "https://models.babylonjs.com/",
@@ -180,6 +210,7 @@ function importBabylonMesh(mesh, posX, posZ) {
     scene
   ).then((result) => {
     const importedMesh = result.meshes[0];
+    importedMesh.name = meshName;
     importedMesh.position.x = posX;
     importedMesh.position.y = mesh.posY;
     importedMesh.position.z = posZ;
@@ -198,22 +229,71 @@ function importElements(element) {
     var z = Math.sin(angle) * radius;
     angle = angle + incAngle;
 
-    if (element == "mesh") importBabylonMesh(meshesArray[i], x, z);
+    if (element == "mesh") importBabylonMesh(meshesArray[i], "mesh" + i, x, z);
     else {
-      var barrel = new ExplodingBarrel("barrel" + i, x, z);
-      barrels.set("barrel" + i, barrel);
+      importBabylonMesh(meshesArray[7], "barrel" + i, x, z);
 
-      var point = [{ x: x, z: z }];
-      barrelsPoints.set("barrel" + i, point);
-      //console.log(barrelsPoints.get("barrel" + i));
+      var cylinder = BABYLON.MeshBuilder.CreateCylinder("area" + i, {
+        height: 1.8,
+        diameter: 1.5,
+      });
+      cylinder.position.x = x;
+      cylinder.position.y = 1;
+      cylinder.position.z = z;
+      cylinder.rotation.x = 0.2;
+      cylinder.visibility = false;
+
+      areas.set("area" + i, cylinder);
     }
   }
 }
 
-function triggerExplosion() {
-  scene.meshes.forEach((mesh) => {
-    console.log(mesh);
-  });
+function startParticleOnObject(object) {
+  const particleSystem = new BABYLON.ParticleSystem("flareParticle", 1000);
+  particleSystem.particleTexture = new BABYLON.Texture("./particles/fire.png");
+
+  particleSystem.minSize = 0.05;
+  particleSystem.maxSize = 0.2;
+
+  particleSystem.targetStopDuration = 1.25;
+
+  particleSystem.color1 = new BABYLON.Color4(1, 0, 0, 0);
+
+  particleSystem.emitRate = 500;
+
+  particleSystem.emitter = new BABYLON.Vector3(
+    object.position.x,
+    object.position.y + 0.1,
+    object.position.z
+  );
+
+  particleSystem.minEmitBox = new BABYLON.Vector3(-0.5, 0, -0.5);
+  particleSystem.maxEmitBox = new BABYLON.Vector3(0.5, 3, 0.5);
+
+  particleSystem.start();
+}
+
+function checkInstersection() {
+  setTimeout(function () {
+    var player = scene.getMeshByName("player");
+    var cont = 0;
+
+    areas.forEach(function (area) {
+      if (area.intersectsMesh(player, true)) {
+        var barrel = scene.getMeshByName("barrel" + cont);
+
+        if (barrel != null) {
+          startParticleOnObject(barrel);
+
+          setTimeout(function () {
+            barrel.dispose();
+            sound.play();
+          }, 3000);
+        }
+      }
+      cont++;
+    });
+  }, 2000);
 }
 
 var engine;
@@ -238,6 +318,12 @@ initFunction().then(() => {
   sceneToRender = scene;
   engine.runRenderLoop(function () {
     if (sceneToRender && sceneToRender.activeCamera) {
+      /*
+      if (gameWon) {
+        restartButton();
+      }
+      */
+      checkInstersection();
       sceneToRender.render();
     }
   });
@@ -255,18 +341,18 @@ class Player {
       "https://assets.babylonjs.com/meshes/",
       "HVGirl.glb",
       scene,
-      function (newMeshes, particleSystems, skeletons, animationGroups) {
-        var hero = newMeshes[0];
+      function (meshes) {
+        var hero = meshes[0];
 
-        hero.name = "hero";
+        hero.name = "player";
 
         hero.scaling.scaleInPlace(0.1);
 
         camera.target = hero;
 
-        var heroSpeed = 0.06;
+        var heroSpeed = 0.1;
         var heroSpeedBackwards = 0.01;
-        var heroRotationSpeed = 0.1;
+        var heroRotationSpeed = 0.05;
 
         var animating = true;
 
@@ -300,15 +386,15 @@ class Player {
             keydown = true;
           }
           if (inputMap["+"]) {
-            heroSpeed = 0.08;
-            keydown = true;
-          }
-          if (inputMap["2"]) {
             heroSpeed = 0.1;
             keydown = true;
           }
+          if (inputMap["2"]) {
+            heroSpeed = 0.15;
+            keydown = true;
+          }
           if (inputMap["3"]) {
-            heroSpeed = 0.12;
+            heroSpeed = 0.2;
             keydown = true;
           }
 
@@ -341,31 +427,7 @@ class Player {
             }
           }
         });
-
-        scene.addMesh(hero);
-
-        //console.log(scene.getMeshByName("hero"));
       }
     );
-  }
-}
-
-class ExplodingBarrel {
-  constructor(barrelName, posX, posZ) {
-    BABYLON.SceneLoader.ImportMeshAsync(
-      "",
-      "https://models.babylonjs.com/",
-      "ExplodingBarrel.glb",
-      scene
-    ).then((result) => {
-      const mesh = result.meshes[0];
-
-      mesh.scaling.scaleInPlace(0.025);
-
-      mesh.name = barrelName;
-
-      mesh.position.x = posX;
-      mesh.position.z = posZ;
-    });
   }
 }
