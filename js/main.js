@@ -41,10 +41,7 @@ const collectablePosition = [
 const meshesArray = [
   { fileName: "aerobatic_plane.glb", scale: 30, posY: 5 },
   { fileName: "Georgia-Tech-Dragon/dragon.babylon", scale: 50, posY: 0 },
-  { fileName: "Skull/skull.babylon", scale: 0.05, posY: 1 },
-  { fileName: "toast_acrobatics.glb", scale: 10, posY: 0 },
-  { fileName: "shark.glb", scale: 1, posY: -2.5 },
-  { fileName: "Channel9/Channel9.stl", scale: 0.1, posY: 0 },
+  { fileName: "shark.glb", scale: 1, posY: -2 },
   { fileName: "seagulf.glb", scale: 0.006, posY: 3.15 },
   { fileName: "ExplodingBarrel.glb", scale: 0.025, posY: 0 },
   { fileName: "emoji_heart.glb", scale: 60, posY: 0 },
@@ -80,7 +77,7 @@ function createProject(scene, camera) {
   advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
   informationsPanel();
   scorePanel();
-  instructions();
+  showInstructions();
 
   createSkybox();
   createGround();
@@ -188,7 +185,7 @@ function scorePanel() {
   advancedTexture.addControl(scorePanel);
 }
 
-function instructions() {
+function showInstructions() {
   var instructions = new BABYLON.GUI.TextBlock();
   instructions.text = "Colete 10 corações, começando do maior para o menor";
   instructions.fontSize = 24;
@@ -199,6 +196,15 @@ function instructions() {
   setTimeout(function () {
     advancedTexture.removeControl(instructions);
   }, 6000);
+}
+
+function showGameOver() {
+  var finalMessage = new BABYLON.GUI.TextBlock();
+  finalMessage.text = "Fim de jogo";
+  finalMessage.fontSize = 24;
+  finalMessage.top = -150;
+  finalMessage.color = "white";
+  advancedTexture.addControl(finalMessage);
 }
 
 function createSkybox() {
@@ -268,7 +274,7 @@ function importBabylonMesh(mesh, meshName, posX, posZ, scale) {
 }
 
 function importElements(element) {
-  var quantity = element == "meshes" ? 7 : 14;
+  var quantity = element == "meshes" ? 4 : 7;
   var radius = element == "meshes" ? 60 : 30;
   var incAngle = Math.PI / (quantity / 2);
   var angle = 0;
@@ -282,11 +288,11 @@ function importElements(element) {
       importBabylonMesh(meshesArray[i], "mesh" + i, x, z, meshesArray[i].scale);
     else {
       importBabylonMesh(
-        meshesArray[7],
+        meshesArray[4],
         "barrel" + i,
         x,
         z,
-        meshesArray[7].scale
+        meshesArray[4].scale
       );
 
       const torus = BABYLON.MeshBuilder.CreateTorus("torus", {
@@ -307,11 +313,11 @@ function importCollectables() {
   var scale = 4;
   for (i = 0; i < 10; i++) {
     importBabylonMesh(
-      meshesArray[8],
+      meshesArray[5],
       "collectable" + i,
       collectablePosition[i].x,
       collectablePosition[i].z,
-      meshesArray[8].scale - scale
+      meshesArray[5].scale - scale
     );
 
     scale += 4;
@@ -461,12 +467,14 @@ function restartGame() {
   btnRestart.background = "black";
   btnRestart.horizontalAlignment =
     BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
-  btnRestart.top = -100;
+  btnRestart.top = -50;
   advancedTexture.addControl(btnRestart);
 
   btnRestart.onPointerClickObservable.add(function () {
     location.reload();
   });
+
+  showGameOver();
 
   inputMap["b"] = "keydown";
   const sambaAnim = scene.getAnimationGroupByName("Samba");
