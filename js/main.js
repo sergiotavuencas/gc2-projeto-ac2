@@ -11,8 +11,6 @@ var createDefaultEngine = function () {
   });
 };
 
-var player;
-var camera;
 var inputMap = {};
 
 var advancedTexture;
@@ -88,9 +86,9 @@ function createProject(scene, camera) {
   createGround();
   createAreaLimit();
 
-  player = new Player(scene, camera, actionManager());
+  const player = new Player(scene, camera, actionManager());
 
-  //importElements("meshes");
+  importElements("meshes");
   importElements("barrels");
   importCollectables();
 
