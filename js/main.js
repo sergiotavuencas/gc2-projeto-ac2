@@ -11,26 +11,52 @@ var createDefaultEngine = function () {
   });
 };
 
-var areas = new Map();
-var sound;
-var intersected = false;
+var player;
+var camera;
+var inputMap = {};
+
+var advancedTexture;
+var score;
+
+var barrelsAreas = new Map();
+var collectablesAreas = new Map();
+
+var barrelSound;
+var collectableSound;
+
 var gameWon = false;
+var collectableColected = 0;
+
+const collectablePosition = [
+  { x: 60, z: 0 },
+  { x: 0, z: -60 },
+  { x: -30, z: 5 },
+  { x: -5, z: -30 },
+  { x: 35, z: -14 },
+  { x: 14, z: -27 },
+  { x: 9, z: 49 },
+  { x: -49, z: -9 },
+  { x: -33.3, z: 24.7 },
+  { x: 24.7, z: -33.3 },
+];
+
 const meshesArray = [
   { fileName: "aerobatic_plane.glb", scale: 30, posY: 5 },
   { fileName: "Georgia-Tech-Dragon/dragon.babylon", scale: 50, posY: 0 },
-  { fileName: "Skull/skull.babylon", scale: 0.015, posY: 0.45 },
-  { fileName: "toast_acrobatics.glb", scale: 5, posY: 0 },
+  { fileName: "Skull/skull.babylon", scale: 0.05, posY: 1 },
+  { fileName: "toast_acrobatics.glb", scale: 10, posY: 0 },
   { fileName: "shark.glb", scale: 1, posY: -2.5 },
-  { fileName: "haunted_house.glb", scale: 60, posY: 0 },
+  { fileName: "Channel9/Channel9.stl", scale: 0.1, posY: 0 },
   { fileName: "seagulf.glb", scale: 0.006, posY: 3.15 },
   { fileName: "ExplodingBarrel.glb", scale: 0.025, posY: 0 },
+  { fileName: "emoji_heart.glb", scale: 60, posY: 0 },
 ];
 
 var createScene = function () {
   engine.enableOfflineSupport = false;
   scene = new BABYLON.Scene(engine);
 
-  const camera = new BABYLON.ArcRotateCamera(
+  camera = new BABYLON.ArcRotateCamera(
     "camera",
     -Math.PI / 2,
     Math.PI / 2.5,
@@ -53,35 +79,45 @@ function createProject(scene, camera) {
   scene.collisionEnabled = true;
   //scene.debugLayer.show();
 
-  var advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI(
-    "UI"
-  );
+  advancedTexture = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+  informationsPanel();
+  scorePanel();
+  instructions();
 
-  informationsPanel(advancedTexture);
-  //restartButton(advancedTexture);
-
-  //createSkybox();
-  //createGround();
+  createSkybox();
+  createGround();
   createAreaLimit();
 
-  const player = new Player(scene, camera, actionManager());
+  player = new Player(scene, camera, actionManager());
 
-  //importElements("mesh");
-  importElements("barrel");
+  //importElements("meshes");
+  importElements("barrels");
+  importCollectables();
 
-  sound = new BABYLON.Sound("sound", "./sounds/explosion.wav", scene, null, {
-    loop: false,
-    autoplay: false,
-  });
+  barrelSound = new BABYLON.Sound(
+    "barrelSound",
+    "./sounds/explosion.wav",
+    scene,
+    null,
+    {
+      loop: false,
+      autoplay: false,
+    }
+  );
 
-  setTimeout(function () {
-    gameWon = true;
-  }, 10000);
+  collectableSound = new BABYLON.Sound(
+    "collectableSound",
+    "./sounds/hey-ye-yaa.wav",
+    scene,
+    null,
+    {
+      loop: false,
+      autoplay: false,
+    }
+  );
 }
 
 function actionManager() {
-  var inputMap = {};
-
   scene.actionManager = new BABYLON.ActionManager(scene);
   scene.actionManager.registerAction(
     new BABYLON.ExecuteCodeAction(
@@ -104,7 +140,7 @@ function actionManager() {
   return inputMap;
 }
 
-function informationsPanel(userInterface) {
+function informationsPanel() {
   var informationsPanel = new BABYLON.GUI.Rectangle();
   informationsPanel.width = 0.245;
   informationsPanel.height = "225px";
@@ -128,28 +164,43 @@ function informationsPanel(userInterface) {
     "\n1, 2 ou 3 para mudar a velocidade";
   informations.color = "white";
   informationsPanel.addControl(informations);
-  userInterface.addControl(informationsPanel);
+  advancedTexture.addControl(informationsPanel);
 }
 
-function restartButton(userInterface) {
-  var btnRestart = BABYLON.GUI.Button.CreateSimpleButton(
-    "btnRestart",
-    "RESTART"
-  );
-  btnRestart.width = 0.1;
-  btnRestart.height = "40px";
-  btnRestart.color = "white";
-  btnRestart.background = "black";
-  btnRestart.horizontalAlignment =
-    BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
-  btnRestart.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
-  userInterface.addControl(btnRestart);
+function scorePanel() {
+  var scorePanel = new BABYLON.GUI.Rectangle();
+  scorePanel.width = 0.15;
+  scorePanel.height = "90px";
+  scorePanel.cornerRadius = 5;
+  scorePanel.thickness = 4;
+  scorePanel.background = "black";
 
-  btnRestart.onPointerClickObservable.add(function () {
-    location.reload();
-  });
+  scorePanel.horizontalAlignment =
+    BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+  scorePanel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
 
-  gameWon = false;
+  scorePanel.alpha = 0.7;
+
+  score = new BABYLON.GUI.TextBlock();
+  score.text = "Corações coletados\n\n" + collectableColected;
+  score.fontSize = 20;
+  score.color = "white";
+
+  scorePanel.addControl(score);
+  advancedTexture.addControl(scorePanel);
+}
+
+function instructions() {
+  var instructions = new BABYLON.GUI.TextBlock();
+  instructions.text = "Colete 10 corações, começando do maior para o menor";
+  instructions.fontSize = 24;
+  instructions.top = -100;
+  instructions.color = "white";
+  advancedTexture.addControl(instructions);
+
+  setTimeout(function () {
+    advancedTexture.removeControl(instructions);
+  }, 6000);
 }
 
 function createSkybox() {
@@ -202,7 +253,7 @@ function createAreaLimit() {
   cylinder.checkCollisions = true;
 }
 
-function importBabylonMesh(mesh, meshName, posX, posZ) {
+function importBabylonMesh(mesh, meshName, posX, posZ, scale) {
   BABYLON.SceneLoader.ImportMeshAsync(
     "",
     "https://models.babylonjs.com/",
@@ -214,37 +265,70 @@ function importBabylonMesh(mesh, meshName, posX, posZ) {
     importedMesh.position.x = posX;
     importedMesh.position.y = mesh.posY;
     importedMesh.position.z = posZ;
-    importedMesh.scaling.scaleInPlace(mesh.scale);
+    importedMesh.scaling.scaleInPlace(scale);
   });
 }
 
 function importElements(element) {
-  var angle = 0;
-  var quantity = element == "mesh" ? 7 : 14;
+  var quantity = element == "meshes" ? 7 : 14;
+  var radius = element == "meshes" ? 60 : 30;
   var incAngle = Math.PI / (quantity / 2);
-  var radius = element == "mesh" ? 60 : 40;
+  var angle = 0;
 
   for (var i = 0; i < quantity; i++) {
     var x = Math.cos(angle) * radius;
     var z = Math.sin(angle) * radius;
     angle = angle + incAngle;
 
-    if (element == "mesh") importBabylonMesh(meshesArray[i], "mesh" + i, x, z);
+    if (element == "meshes")
+      importBabylonMesh(meshesArray[i], "mesh" + i, x, z, meshesArray[i].scale);
     else {
-      importBabylonMesh(meshesArray[7], "barrel" + i, x, z);
+      importBabylonMesh(
+        meshesArray[7],
+        "barrel" + i,
+        x,
+        z,
+        meshesArray[7].scale
+      );
 
-      var cylinder = BABYLON.MeshBuilder.CreateCylinder("area" + i, {
-        height: 1.8,
-        diameter: 1.5,
+      const torus = BABYLON.MeshBuilder.CreateTorus("torus", {
+        thickness: 0.05,
+        diameter: 1.15,
+        sideOrientation: 1,
       });
-      cylinder.position.x = x;
-      cylinder.position.y = 1;
-      cylinder.position.z = z;
-      cylinder.rotation.x = 0.2;
-      cylinder.visibility = false;
+      torus.position.x = x;
+      torus.position.z = z;
+      torus.visibility = false;
 
-      areas.set("area" + i, cylinder);
+      barrelsAreas.set("barrelArea" + i, torus);
     }
+  }
+}
+
+function importCollectables() {
+  var scale = 4;
+  for (i = 0; i < 10; i++) {
+    importBabylonMesh(
+      meshesArray[8],
+      "collectable" + i,
+      collectablePosition[i].x,
+      collectablePosition[i].z,
+      meshesArray[8].scale - scale
+    );
+
+    scale += 4;
+
+    const torus = BABYLON.MeshBuilder.CreateTorus("torus", {
+      thickness: 0.2,
+      diameter: 1.15,
+      sideOrientation: 1,
+    });
+    torus.position.x = collectablePosition[i].x;
+    torus.position.y = 0;
+    torus.position.z = collectablePosition[i].z;
+    torus.visibility = false;
+
+    collectablesAreas.set("collectableArea" + i, torus);
   }
 }
 
@@ -259,7 +343,7 @@ function startParticleOnObject(object) {
 
   particleSystem.color1 = new BABYLON.Color4(1, 0, 0, 0);
 
-  particleSystem.emitRate = 500;
+  particleSystem.emitRate = 100;
 
   particleSystem.emitter = new BABYLON.Vector3(
     object.position.x,
@@ -273,27 +357,122 @@ function startParticleOnObject(object) {
   particleSystem.start();
 }
 
+function applyAnimationOnObject(object) {
+  var yElevation = new BABYLON.Animation(
+    "yElevation",
+    "position.y",
+    100,
+    BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+    BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+  ); /* Criação da animação de rotação das teclas no eixo X */
+  let keyFrames = []; /* Array para os estados da animação */
+
+  keyFrames.push({
+    frame: 0,
+    value: -1,
+  });
+
+  keyFrames.push({
+    frame: 5,
+    value: -0.5,
+  });
+
+  keyFrames.push({
+    frame: 10,
+    value: 0.5,
+  });
+
+  keyFrames.push({
+    frame: 15,
+    value: 0,
+  });
+
+  keyFrames.push({
+    frame: 20,
+    value: 0.5,
+  });
+
+  keyFrames.push({
+    frame: 25,
+    value: 1,
+  });
+
+  yElevation.setKeys(keyFrames);
+
+  scene.beginDirectAnimation(object, [yElevation], 0, 25, true);
+}
+
 function checkInstersection() {
   setTimeout(function () {
     var player = scene.getMeshByName("player");
-    var cont = 0;
+    var barrelCont = 0;
+    var collectableCont = 0;
 
-    areas.forEach(function (area) {
+    barrelsAreas.forEach(function (area) {
       if (area.intersectsMesh(player, true)) {
-        var barrel = scene.getMeshByName("barrel" + cont);
+        var barrel = scene.getMeshByName("barrel" + barrelCont);
 
         if (barrel != null) {
           startParticleOnObject(barrel);
 
           setTimeout(function () {
             barrel.dispose();
-            sound.play();
+            barrelSound.play();
           }, 3000);
         }
       }
-      cont++;
+      barrelCont++;
     });
-  }, 2000);
+
+    collectablesAreas.forEach(function (area) {
+      if (area.intersectsMesh(player, true)) {
+        if (collectableCont == collectableColected) {
+          var collectable = scene.getMeshByName(
+            "collectable" + collectableCont
+          );
+
+          if (collectable != null) {
+            applyAnimationOnObject(collectable);
+            setTimeout(function () {
+              score.text = "Corações coletados\n\n" + collectableColected;
+              collectable.dispose();
+              collectableSound.play();
+            }, 500);
+            collectableColected++;
+
+            if (collectableColected == 10) {
+              gameWon = true;
+              collectableColected = 0;
+            }
+          }
+        }
+      }
+      collectableCont++;
+    });
+  }, 4000);
+}
+
+function restartGame() {
+  var btnRestart = BABYLON.GUI.Button.CreateSimpleButton(
+    "btnRestart",
+    "RESTART"
+  );
+  btnRestart.width = 0.1;
+  btnRestart.height = "40px";
+  btnRestart.color = "white";
+  btnRestart.background = "black";
+  btnRestart.horizontalAlignment =
+    BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+  btnRestart.top = -100;
+  advancedTexture.addControl(btnRestart);
+
+  btnRestart.onPointerClickObservable.add(function () {
+    location.reload();
+  });
+
+  inputMap["b"] = "keydown";
+  const sambaAnim = scene.getAnimationGroupByName("Samba");
+  sambaAnim.start(true, 1.0, sambaAnim.from, sambaAnim.to, false);
 }
 
 var engine;
@@ -318,11 +497,10 @@ initFunction().then(() => {
   sceneToRender = scene;
   engine.runRenderLoop(function () {
     if (sceneToRender && sceneToRender.activeCamera) {
-      /*
       if (gameWon) {
-        restartButton();
+        restartGame();
+        gameWon = false;
       }
-      */
       checkInstersection();
       sceneToRender.render();
     }
